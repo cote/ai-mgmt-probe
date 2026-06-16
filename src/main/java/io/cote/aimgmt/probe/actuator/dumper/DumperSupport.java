@@ -9,8 +9,11 @@ import org.springframework.boot.actuate.endpoint.ExposableEndpoint;
 import org.springframework.boot.actuate.endpoint.InvocationContext;
 import org.springframework.boot.actuate.endpoint.Operation;
 import org.springframework.boot.actuate.endpoint.OperationType;
+import org.springframework.boot.actuate.endpoint.OperationArgumentResolver;
 import org.springframework.boot.actuate.endpoint.SecurityContext;
 import org.springframework.boot.actuate.endpoint.web.WebOperation;
+import org.springframework.boot.actuate.endpoint.web.WebServerNamespace;
+import org.springframework.boot.micrometer.metrics.autoconfigure.export.prometheus.PrometheusOutputFormat;
 
 import io.cote.aimgmt.probe.actuator.McpEndpointDiscoverer.McpOperation;
 
@@ -63,7 +66,14 @@ final class DumperSupport {
         if (op instanceof WebOperation web) {
             String matchAll = web.getRequestPredicate().getMatchAllRemainingPathSegmentsVariable();
             Map<String, Object> args = (matchAll == null) ? Map.of() : Map.of(matchAll, new String[0]);
-            return web.invoke(new InvocationContext(SecurityContext.NONE, args));
+            // Some web ops take args the web framework normally injects per-request:
+            // health needs a WebServerNamespace; prometheus needs an output format
+            // (usually negotiated from the Accept header). Supply defaults so direct
+            // invocation here doesn't fail.
+            return web.invoke(new InvocationContext(SecurityContext.NONE, args,
+                    OperationArgumentResolver.of(WebServerNamespace.class, () -> WebServerNamespace.SERVER),
+                    OperationArgumentResolver.of(PrometheusOutputFormat.class,
+                            () -> PrometheusOutputFormat.CONTENT_TYPE_004)));
         }
         return "unsupported operation type: " + op.getClass().getSimpleName();
     }

@@ -1,0 +1,15 @@
+# Stage 2a - open / unsecured deploy (public route, no auth).
+# This is deliberately the insecure version: it sets up the "why you need the
+# gateway" moment. Stage 2b swaps in explicit routes + SSO bind (see ../DEPLOY.md).
+applications:
+  - name: mcp-probe
+    memory: 1G
+    instances: 1
+    path: target/probe-0.0.1-SNAPSHOT.jar
+    buildpacks:
+      - java_buildpack_offline
+    env:
+      # Boot 4 needs JDK 25 or the buildpack picks an older JRE and the app won't start.
+      JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 25.+ } }'
+      # Activates application-cloud.properties (graceful shutdown, CF actuator).
+      SPRING_PROFILES_ACTIVE: cloud

@@ -6,6 +6,9 @@ import org.springframework.boot.actuate.endpoint.web.WebEndpointsSupplier;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+
 /**
  * HTTP dumper: a plain MVC endpoint at GET /dumper that aggregates the WEB-exposed
  * Actuator endpoints into one JSON tree.
@@ -19,13 +22,19 @@ import org.springframework.web.bind.annotation.RestController;
 public class DumperController {
 
     private final WebEndpointsSupplier webEndpoints;
+    private final Counter invocations;
 
-    DumperController(WebEndpointsSupplier webEndpoints) {
+    DumperController(WebEndpointsSupplier webEndpoints, MeterRegistry registry) {
         this.webEndpoints = webEndpoints;
+        this.invocations = Counter.builder("probe.dumper.invocations")
+                .description("Times the dumper has been called")
+                .tag("interface", "web")
+                .register(registry);
     }
 
     @GetMapping("/dumper")
     public Map<String, Object> dumper() {
+        invocations.increment();
         return DumperSupport.dump(webEndpoints.getEndpoints());
     }
 }
