@@ -1,15 +1,24 @@
-# Stage 2a - open / unsecured deploy (public route, no auth).
-# This is deliberately the insecure version: it sets up the "why you need the
-# gateway" moment. Stage 2b swaps in explicit routes + SSO bind (see ../DEPLOY.md).
+# Stage 2b - locked down behind the MCP Gateway.
+#
+# Model: NO public route. The app is reachable ONLY via:
+#   - the MCP Gateway, over the internal route (container-to-container), for /mcp
+#   - the platform's Metric Registrar, scraping the container directly (--internal-port)
+# Because nothing is on the public gorouter, there is no public bypass and therefore
+# NO app-side security code (no oauth2-client, no SecurityConfig). Auth for /mcp is the
+# gateway's job, federated at bind time. See ../DEPLOY.md and ../METRICS-NOTES.md.
 applications:
   - name: mcp-probe
     memory: 1G
     instances: 1
     path: target/probe-0.0.1-SNAPSHOT.jar
+    # TCP health check - no public HTTP route to health-check against.
+    health-check-type: port
     buildpacks:
       - java_buildpack_offline
     env:
-      # Boot 4 needs JDK 25 or the buildpack picks an older JRE and the app won't start.
       JBP_CONFIG_OPEN_JDK_JRE: '{ jre: { version: 25.+ } }'
-      # Activates application-cloud.properties (graceful shutdown, CF actuator).
       SPRING_PROFILES_ACTIVE: cloud
+    routes:
+      # Internal route only. The gateway gets a C2C network policy to this at bind time.
+      # No public (.apps.<domain>) route is mapped, so the app is not publicly reachable.
+      - route: mcp-probe.apps.internal
