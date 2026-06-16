@@ -1,0 +1,4 @@
+# Register MCP as an Actuator exposure technology, so management.endpoints.mcp.exposure.*
+# can make endpoint beans available independently of web/jmx exposure.
+org.springframework.boot.actuate.autoconfigure.endpoint.condition.EndpointExposureOutcomeContributor=\
+io.cote.aimgmt.probe.actuator.McpExposureOutcomeContributor
