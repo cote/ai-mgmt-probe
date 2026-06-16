@@ -29,8 +29,8 @@ import io.modelcontextprotocol.spec.McpSchema.TextContent;
  * Assumes the default application.properties exposure (health, info, env, metrics, dumper).
  */
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT, properties = {
-        "management.endpoints.web.exposure.include=health,info,env,metrics,dumper",
-        "management.endpoints.mcp.exposure.include=health,info,env,metrics,dumper",
+        "management.endpoints.web.exposure.include=health,info,env,metrics",
+        "management.endpoints.mcp.exposure.include=health,info,env,metrics",
         "management.endpoint.health.show-details=always"
 })
 class McpToolsIntegrationTests {
@@ -76,8 +76,7 @@ class McpToolsIntegrationTests {
         CallToolResult result = client.callTool(CallToolRequest.builder("actuatorEndpoints").build());
         assertFalse(result.isError());
         String text = firstText(result);
-        assertTrue(text.contains("health") && text.contains("metrics") && text.contains("dumper"),
-                () -> text);
+        assertTrue(text.contains("health") && text.contains("metrics"), () -> text);
     }
 
     @Test

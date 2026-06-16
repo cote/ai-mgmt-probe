@@ -27,14 +27,13 @@ final class DumperSupport {
     private DumperSupport() {
     }
 
-    /** Walk endpoints, invoke each root read op, skip "dumper" (self), assemble by id. */
+    /** Walk endpoints, invoke each root read op, assemble by id.
+     *  No self-skip needed: the dumper is a tool/controller, not an Actuator @Endpoint,
+     *  so it never appears in the catalog it walks. */
     static Map<String, Object> dump(Collection<? extends ExposableEndpoint<? extends Operation>> endpoints) {
         Map<String, Object> all = new LinkedHashMap<>();
         for (ExposableEndpoint<? extends Operation> endpoint : endpoints) {
             String id = endpoint.getEndpointId().toString();
-            if (id.equals("dumper")) {
-                continue; // don't dump ourselves -> infinite recursion
-            }
             endpoint.getOperations().stream()
                     .filter(op -> op.getType() == OperationType.READ && isRoot(op))
                     .findFirst()
