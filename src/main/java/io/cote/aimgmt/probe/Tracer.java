@@ -50,10 +50,9 @@ public class Tracer {
     private volatile Map<String, Object> modelInfoCache;
 
     private static final String SYSTEM_PROMPT = """
-            When a user asks a question, answer it in three sentences to the best of
-            your ability. You are primarly used to test and report on
-            AI servies, monitoring, management, observality stuff as an example
-            and diagnostics tool.
+            When a user asks a question, answer it in three sentences to the best of your
+            ability. You are primarily used as an example and diagnostics tool to test and
+            report on AI services: monitoring, management, and observability.
             """;
 
     // Advisor class names in the call chain, captured so trace() can report what's wired in.

@@ -19,23 +19,21 @@ public class Echo {
             @McpToolParam(description = "Toggle to send back arguments AND all meta-info known. Defaults to false.", required = false) Boolean sendAllInfo,
             CallToolRequest request) {
 
-        Map<String, Object> reponseToSend = new LinkedHashMap<>();
+        Map<String, Object> responseToSend = new LinkedHashMap<>();
         Map<String, Object> requestToEcho = new LinkedHashMap<>();
 
         requestToEcho.put("name", request.name());
         requestToEcho.put("argsIn", request.arguments());
-        // the framework can't handle the lack of an argument pased in and use
-        // the default...makes sense, I guess...since you want method signature
-        // matching for overloading...?
+        // Boxed Boolean so a missing sendAllInfo arg is null, not an NPE: an optional
+        // @McpToolParam isn't supplied when absent, and a primitive would fail to bind.
         if (Boolean.TRUE.equals(sendAllInfo)) {
             requestToEcho.put("meta",
                     Map.of("size", request.meta().size(),
                             "meta-fields", request.meta()));
-
         }
 
-        reponseToSend.put("originalRequest", requestToEcho);
-        return Collections.unmodifiableMap(reponseToSend);
+        responseToSend.put("originalRequest", requestToEcho);
+        return Collections.unmodifiableMap(responseToSend);
     }
 
 }
