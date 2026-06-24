@@ -89,10 +89,23 @@ class McpToolsIntegrationTests {
 
     @Test
     void actuatorDumperAggregatesEndpoints() {
-        CallToolResult result = client.callTool(CallToolRequest.builder("actuatorDumper").build());
+        // Pass an (empty) arguments object - the tool now has an optional includeMetricValues
+        // param, and a call with no arguments object at all is rejected by the framework.
+        CallToolResult result = client.callTool(CallToolRequest.builder("actuatorDumper")
+                .arguments(Map.of()).build());
         assertFalse(result.isError());
         String text = firstText(result);
         assertTrue(text.contains("health") && text.contains("metrics"), () -> text);
+    }
+
+    @Test
+    void actuatorDumperResolvesMetricValuesWhenRequested() {
+        CallToolResult result = client.callTool(CallToolRequest.builder("actuatorDumper")
+                .arguments(Map.of("includeMetricValues", true)).build());
+        assertFalse(result.isError(), () -> firstText(result));
+        // With values resolved, a known metric's measurement statistic shows up.
+        assertTrue(firstText(result).contains("jvm.memory.used") && firstText(result).contains("VALUE"),
+                () -> firstText(result));
     }
 
     private static String firstText(CallToolResult result) {
