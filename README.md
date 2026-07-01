@@ -7,7 +7,7 @@ Diagnostics and tracing MCP Servers. These tools help trace the chain of calls t
 MCP tools exposed by the running app:
 
 - **`echo`** - returns whatever you send. Optional `sendAllInfo` flag echoes the full `CallToolRequest` (name, args, meta). Sanity check that the MCP transport is wired up.
-- **`trace`** - calls an OpenAI-compatible chat model and returns the answer plus everything observable: model name, token usage, finish reason, advisor chain, request/response metadata. Credentials are masked.
+- **`trace`** - calls an OpenAI-compatible chat model and returns the answer plus everything observable: model name, token usage, finish reason, advisor chain, request/response metadata. Credentials are masked. **Requires a model endpoint** - locally that's Ollama; in cloud that's a bound GenAI service (see "Before you deploy: bind a GenAI service" below).
 - **`aiConfig`** / **`modelInfo`** / **`requestInfo`** - introspect what Spring AI is actually configured with: base URL (no api-key), default chat options, ChatClient defaults, advisors in the chain. `requestInfo` also dumps the full inbound HTTP request (headers, tracing context, forwarded headers) so you can see what an upstream MCP gateway is injecting - credential-bearing header values are replaced with a fixed `******`.
 - **`whoami`** - returns the validated JWT claims for the calling user (sub, user_name, email, scope, exp, iat, ...). Spring Security validates the JWT against the configured identity provider's JWKS before this tool runs; the raw bearer token is never exposed. Cloud profile only - locally there's no OIDC provider configured so it reports what's on the SecurityContext instead.
 - **`actuator*`** - one MCP tool per exposed Boot Actuator endpoint (`health`, `info`, `metrics`, optionally `configprops`/`env`/...). Discovered dynamically via `McpEndpointDiscoverer`.
@@ -50,6 +50,30 @@ You can set it three ways:
 3. **Alternative: OIDC discovery.** Instead of `jwk-set-uri`, set `spring.security.oauth2.resourceserver.jwt.issuer-uri` to the IdP's base URL. Spring will fetch `/.well-known/openid-configuration` to find the JWKS. This also validates the JWT's `iss` claim, which is stricter (and better).
 
 If the property is empty when the cloud profile activates, Spring Security's Resource Server bean fails to construct and the app won't start. That's intentional - fail-loud beats a silently-open MCP endpoint.
+
+## Before you deploy: bind a GenAI service (for the `trace` tool)
+
+The cloud profile blanks out `spring.ai.openai.base-url` / `api-key` / `chat.options.model` on purpose. Without a bound GenAI service, `trace` fails with "no endpoint configured" - every other tool still works. Blank-by-default here prevents the base file's local Ollama URL (`http://localhost:11434`) from silently leaking into cloud and producing a confusing "Connection refused" error.
+
+On Tanzu Platform for Cloud Foundry with the AI Solutions tile:
+
+```bash
+cf marketplace -e genai                             # confirm the offering
+cf create-service genai <plan> mcp-probe-genai      # pick a plan from the marketplace
+cf bind-service mcp-probe mcp-probe-genai
+cf restart mcp-probe
+```
+
+`spring-boot-starter-cloudfoundry`'s cfenv reads the bound service's credentials from `VCAP_SERVICES` and maps them to `SPRING_AI_OPENAI_BASE_URL`, `SPRING_AI_OPENAI_API_KEY`, and `SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL` environment properties. Spring AI's OpenAI starter reads those automatically.
+
+If you want to point at OpenAI proper instead of a Tanzu GenAI service, set the same env vars manually:
+
+```bash
+cf set-env mcp-probe SPRING_AI_OPENAI_BASE_URL         https://api.openai.com
+cf set-env mcp-probe SPRING_AI_OPENAI_API_KEY          <key>
+cf set-env mcp-probe SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL gpt-4o-mini
+cf restart mcp-probe
+```
 
 ## Requirements
 
@@ -106,9 +130,9 @@ cf register-metrics-endpoint mcp-probe /actuator/prometheus    # one-time
 
 You'll also need:
 
-- The JWKS URL set (see **Before you deploy** above; the app won't start without it under the cloud profile).
-- An OpenAI-compatible model bound or configured via env / VCAP. The cloud profile reads `spring.ai.openai.base-url` / `api-key` / `chat.options.model` from the environment.
-- A network policy from the MCP Gateway app to `mcp-probe` on the app port (the gateway's bind step sets this up).
+- **The JWKS URL set** (see "Before you deploy: set the JWKS URL"; the app won't start without it under the cloud profile).
+- **A GenAI service bound** if you want `trace` to work (see "Before you deploy: bind a GenAI service"). If you skip this, `trace` fails but every other tool still works.
+- **A network policy** from the MCP Gateway app to `mcp-probe` on the app port (the gateway's bind step sets this up).
 
 A walk-through of the local / open-CF / gateway-locked progression lives in the parent repo's `DEPLOY.md`.
 
