@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MCP trace viewer</title>
+<style>
+  :root {
+    --base03:#002b36; --base02:#073642; --base01:#586e75;
+    --base00:#657b83; --base0:#839496; --base1:#93a1a1;
+    --yellow:#b58900; --orange:#cb4b16; --red:#dc322f;
+    --magenta:#d33682; --violet:#6c71c4;
+    --blue:#268bd2; --cyan:#2aa198; --green:#859900;
+  }
+  html, body {
+    background: var(--base03); color: var(--base0);
+    font: 18.2px/1.55 -apple-system, "SF Pro Text", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+    margin: 0;
+  }
+  main { max-width: 1400px; margin: 0 auto; padding: 32px 24px 96px; }
+  h1, h2 { color: var(--base1); font-weight: 600; }
+  h1 { font-size: 28px; margin: 0 0 8px; }
+  h2 { font-size: 20px; margin: 32px 0 14px; }
+  h4 { font-size: 15px; margin: 14px 0 4px; color: var(--base01); text-transform: uppercase; letter-spacing: 0.06em; }
+  p.lede { color: var(--base1); margin: 0 0 20px; }
+  code, pre { font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; }
+  pre {
+    background: var(--base02); color: var(--base1); border-radius: 6px;
+    padding: 12px 14px; margin: 8px 0; overflow-x: auto;
+    font-size: 14px; line-height: 1.5; white-space: pre;
+  }
+
+  details {
+    background: var(--base02); border: 1px solid var(--base01);
+    border-radius: 8px; margin: 12px 0;
+  }
+  details > summary {
+    cursor: pointer; padding: 12px 16px; list-style: none;
+    color: var(--base1); font-weight: 600;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before {
+    content: "▸"; color: var(--base01); font-weight: 400;
+    margin-right: 4px; transition: transform 0.1s ease;
+  }
+  details[open] > summary::before { transform: rotate(90deg); }
+  details > .body { padding: 6px 16px 18px; border-top: 1px solid var(--base03); }
+
+  details.call { border-color: var(--violet); }
+  details.call > summary { background: rgba(108,113,196,.10); border-radius: 8px 8px 0 0; }
+  details.call.err { border-color: var(--red); }
+  details.call.err > summary { background: rgba(220,50,47,.10); }
+
+  details.section { background: var(--base03); border: 1px solid var(--base02); margin: 8px 0; }
+  details.section > summary { font-size: 14px; padding: 10px 14px; font-weight: 500; }
+
+  .badge {
+    display: inline-block; padding: 3px 8px; border-radius: 999px; font-size: 12px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-right: 8px;
+  }
+  .badge.req  { background: rgba(38,139,210,.18);  color: var(--blue);   border: 1px solid var(--blue); }
+  .badge.aud  { background: rgba(181,137,0,.18);   color: var(--yellow); border: 1px solid var(--yellow); }
+  .badge.aud2 { background: rgba(133,153,0,.18);   color: var(--green);  border: 1px solid var(--green); }
+  .badge.fwd  { background: rgba(133,153,0,.18);   color: var(--green);  border: 1px solid var(--green); }
+  .badge.proc { background: rgba(108,113,196,.18); color: var(--violet); border: 1px solid var(--violet); }
+  .badge.res  { background: rgba(42,161,152,.18);  color: var(--cyan);   border: 1px solid var(--cyan); }
+  .badge.spec { background: rgba(220,50,47,.10);   color: var(--red);    border: 1px solid var(--red); }
+  .badge.err  { background: rgba(220,50,47,.18);   color: var(--red);    border: 1px solid var(--red); }
+
+  .crumb { font-family: "SF Mono", Menlo, monospace; font-size: 13px; color: var(--base1); }
+  .crumb .arrow.in  { color: var(--blue); margin: 0 4px; }
+  .crumb .arrow.out { color: var(--cyan); margin: 0 4px; }
+  .crumb .node.claude  { color: var(--magenta); }
+  .crumb .node.gateway { color: var(--yellow); }
+  .crumb .node.probe   { color: var(--green); }
+  .crumb .node.audit   { color: var(--orange); }
+
+  .not-captured-note {
+    color: var(--base0); background: rgba(88,110,117,.10);
+    border-left: 3px solid var(--base01); padding: 10px 14px; margin: 8px 0;
+    border-radius: 0 4px 4px 0; font-size: 14px;
+  }
+  .real-note {
+    color: var(--base0); background: rgba(133,153,0,.08);
+    border-left: 3px solid var(--green); padding: 10px 14px; margin: 8px 0;
+    border-radius: 0 4px 4px 0; font-size: 14px;
+  }
+  .stats { display: flex; gap: 14px; flex-wrap: wrap; margin: 14px 0 10px; }
+  .stat { background: var(--base02); padding: 10px 14px; border-radius: 6px; min-width: 150px; }
+  .stat .lab { color: var(--base01); font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat .val { color: var(--base1); font-size: 17px; font-weight: 600; }
+  hr { border: 0; border-top: 1px solid var(--base02); margin: 32px 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>MCP trace viewer</h1>
+  <p class="lede">Each row is one MCP call. Expand to walk the request/response chain (Claude → gateway → server → back). Sections marked "not captured" tell you what's missing and why.</p>
+  <div class="stats" id="stats"></div>
+  <div id="calls"></div>
+</main>
+
+<!--
+  Data goes here. Replace the [] with a JSON array of call objects (the trace.json contents).
+  See references/CALL_TREE_SCHEMA.md for the shape.
+-->
+<script id="trace-data" type="application/json">
+[]
+</script>
+
+<script>
+'use strict';
+
+const NODES = {
+  claude:  { label: 'Claude',  cls: 'claude' },
+  gateway: { label: 'gateway', cls: 'gateway' },
+  probe:   { label: 'probe',   cls: 'probe'   },
+};
+
+// -----------------------------------------------------------------------------
+// Small DOM helpers
+// -----------------------------------------------------------------------------
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v;
+    else if (k === 'html') n.innerHTML = v;
+    else n.setAttribute(k, v);
+  }
+  for (const k of kids.flat()) {
+    if (k == null) continue;
+    n.appendChild(typeof k === 'string' ? document.createTextNode(k) : k);
+  }
+  return n;
+}
+function crumb(...parts) {
+  const c = el('span', { class: 'crumb' });
+  for (const p of parts) {
+    if (p.kind === 'arrow') c.appendChild(el('span', { class: `arrow ${p.dir}` }, p.dir === 'in' ? '→' : '←'));
+    else c.appendChild(el('span', { class: `node ${NODES[p.node].cls}` }, NODES[p.node].label + (p.label ? ' ' + p.label : '')));
+  }
+  return c;
+}
+function jsonBlock(obj) {
+  const pre = el('pre');
+  pre.textContent = obj == null ? 'null' : JSON.stringify(obj, null, 2);
+  return pre;
+}
+function isNotCaptured(x) { return x && typeof x === 'object' && x._status === 'not_captured'; }
+function isError(x) { return x && typeof x === 'object' && x._status === 'error'; }
+function noteFor(obj, kind = 'not-captured') {
+  const cls = kind === 'real' ? 'real-note' : 'not-captured-note';
+  const strong = kind === 'real' ? 'Captured.' : 'Not captured.';
+  return el('div', { class: cls },
+    el('strong', {}, strong), ' ',
+    (obj && obj._reason) ? obj._reason : ''
+  );
+}
+function headersOrNote(h) { return isNotCaptured(h) ? noteFor(h) : jsonBlock(h); }
+function bodyOrNote(b) {
+  if (isNotCaptured(b)) return noteFor(b);
+  if (isError(b)) {
+    const wrap = el('div');
+    wrap.appendChild(el('pre', {}, b.error_text || ''));
+    if (b._reason) wrap.appendChild(el('p', { style: 'color: var(--base01); font-size: 13px;' }, b._reason));
+    return wrap;
+  }
+  return jsonBlock(b);
+}
+
+// -----------------------------------------------------------------------------
+// Section renderers
+// -----------------------------------------------------------------------------
+function sectionRequestClaudeGateway(leg) {
+  const s = el('details', { class: 'section' });
+  s.appendChild(el('summary', {},
+    el('span', { class: 'badge req' }, 'request'),
+    crumb({ node: 'claude' }, { kind: 'arrow', dir: 'in' }, { node: 'gateway' })
+  ));
+  const body = el('div', { class: 'body' });
+  const w = leg.wire || {};
+  if (w.url) body.appendChild(el('div', { style: 'font-family: "SF Mono", Menlo, monospace; font-size: 13px; color: var(--base1); padding: 8px 12px; background: var(--base03); border: 1px solid var(--blue); border-radius: 4px; margin: 6px 0;' }, `${w.method || 'POST'} ${w.url} HTTP/1.1`));
+  body.appendChild(el('h4', {}, 'Request headers'));
+  body.appendChild(headersOrNote(w.headers));
+  body.appendChild(el('h4', {}, 'Request body'));
+  body.appendChild(bodyOrNote(w.body));
+  s.appendChild(body);
+  return s;
+}
+
+function sectionAudit(leg) {
+  const isStop = leg.event === 'audit_stop';
+  const audit = leg.audit || {};
+  const isErr = audit.severity === 'ERROR';
+  const badgeClass = isErr ? 'err' : (isStop ? 'aud2' : 'aud');
+  const badgeText  = isErr ? 'audit stop (ERROR)' : (isStop ? 'audit stop' : 'audit start');
+  const arrowDir   = isStop ? 'out' : 'in';
+  const eventName  = audit.eventName || (isStop ? 'audit_stop' : 'audit_start');
+
+  const s = el('details', { class: 'section' });
+  s.appendChild(el('summary', {},
+    el('span', { class: `badge ${badgeClass}` }, badgeText),
+    crumb(
+      { node: 'claude' }, { kind: 'arrow', dir: arrowDir },
+      { node: 'gateway' }, { kind: 'arrow', dir: arrowDir },
+      { node: 'audit', label: eventName }
+    )
+  ));
+  const body = el('div', { class: 'body' });
+  body.appendChild(jsonBlock(audit));
+  s.appendChild(body);
+  return s;
+}
+
+function sectionForwarded(leg) {
+  const captured = leg.captured || 'not_captured';
+  const isReal = captured === 'real';
+  const s = el('details', { class: 'section' });
+  s.appendChild(el('summary', {},
+    el('span', { class: `badge ${isReal ? 'fwd' : 'spec'}` }, isReal ? 'forwarded (REAL)' : 'forwarded leg'),
+    crumb(
+      { node: 'claude' }, { kind: 'arrow', dir: 'in' },
+      { node: 'gateway' }, { kind: 'arrow', dir: 'in' },
+      { node: 'probe' }
+    )
+  ));
+  const body = el('div', { class: 'body' });
+  const w = leg.wire || {};
+  if (w._note) body.appendChild(noteFor({ _reason: w._note }, isReal ? 'real' : 'not-captured'));
+  if (w.url) body.appendChild(el('div', { style: 'font-family: "SF Mono", Menlo, monospace; font-size: 13px; color: var(--base1); padding: 8px 12px; background: var(--base03); border: 1px solid var(--blue); border-radius: 4px; margin: 6px 0;' }, `${w.method || 'POST'} ${w.url} HTTP/1.1`));
+  body.appendChild(el('h4', {}, 'Headers'));
+  body.appendChild(headersOrNote(w.headers));
+  body.appendChild(el('h4', {}, 'Body'));
+  body.appendChild(bodyOrNote(w.body));
+  s.appendChild(body);
+  return s;
+}
+
+function sectionProcess(leg) {
+  const s = el('details', { class: 'section' });
+  s.appendChild(el('summary', {},
+    el('span', { class: 'badge proc' }, 'probe process'),
+    crumb(
+      { node: 'claude' }, { kind: 'arrow', dir: 'in' },
+      { node: 'gateway' }, { kind: 'arrow', dir: 'in' },
+      { node: 'probe' }
+    )
+  ));
+  const body = el('div', { class: 'body' });
+  if (leg.spring_security) {
+    body.appendChild(el('h4', {}, 'Spring Security'));
+    body.appendChild(jsonBlock(leg.spring_security));
+  }
+  if (leg.tool_invocation) {
+    body.appendChild(el('h4', {}, 'Tool invocation'));
+    body.appendChild(jsonBlock(leg.tool_invocation));
+  }
+  s.appendChild(body);
+  return s;
+}
+
+function sectionProbeResponse(leg) {
+  const s = el('details', { class: 'section' });
+  s.appendChild(el('summary', {},
+    el('span', { class: 'badge res' }, 'probe response'),
+    crumb(
+      { node: 'claude' }, { kind: 'arrow', dir: 'out' },
+      { node: 'gateway' }, { kind: 'arrow', dir: 'out' },
+      { node: 'probe' }
+    )
+  ));
+  const body = el('div', { class: 'body' });
+  const w = leg.wire || {};
+  body.appendChild(el('h4', {}, 'Headers'));
+  body.appendChild(headersOrNote(w.headers));
+  body.appendChild(el('h4', {}, 'Body'));
+  body.appendChild(bodyOrNote(w.body));
+  s.appendChild(body);
+  return s;
+}
+
+function sectionResponseGatewayClaude(leg) {
+  const s = el('details', { class: 'section' });
+  s.appendChild(el('summary', {},
+    el('span', { class: 'badge res' }, 'response'),
+    crumb({ node: 'claude' }, { kind: 'arrow', dir: 'out' }, { node: 'gateway' })
+  ));
+  const body = el('div', { class: 'body' });
+  const w = leg.wire || {};
+  body.appendChild(el('h4', {}, 'Response headers'));
+  body.appendChild(headersOrNote(w.headers));
+  body.appendChild(el('h4', {}, 'Response body'));
+  body.appendChild(bodyOrNote(w.body));
+  s.appendChild(body);
+  return s;
+}
+
+// -----------------------------------------------------------------------------
+// Walk the leg chain and produce section elements in order
+// -----------------------------------------------------------------------------
+function walkCall(call) {
+  const sections = [];
+  let leg = call.leg;
+  if (!leg) return sections;
+
+  // Node 1: claude → gateway request
+  sections.push(sectionRequestClaudeGateway(leg));
+
+  // Node 2: gateway audit_start
+  leg = leg.next;
+  if (leg && leg.event === 'audit_start') {
+    sections.push(sectionAudit(leg));
+    leg = leg.next;
+  }
+
+  // Node 3: gateway → probe forwarded
+  if (leg && leg.from === 'gateway' && leg.to === 'probe') {
+    sections.push(sectionForwarded(leg));
+    leg = leg.next;
+  }
+
+  // Node 4: probe process
+  if (leg && leg.at === 'probe' && leg.direction === 'process') {
+    sections.push(sectionProcess(leg));
+    leg = leg.next;
+  }
+
+  // Node 5: probe → gateway response
+  if (leg && leg.from === 'probe' && leg.to === 'gateway') {
+    sections.push(sectionProbeResponse(leg));
+    leg = leg.next;
+  }
+
+  // Node 6: gateway audit_stop
+  if (leg && leg.event === 'audit_stop') {
+    sections.push(sectionAudit(leg));
+    leg = leg.next;
+  }
+
+  // Node 7: gateway → claude response
+  if (leg && leg.from === 'gateway' && leg.to === 'claude') {
+    sections.push(sectionResponseGatewayClaude(leg));
+  }
+
+  return sections;
+}
+
+function anyErrorInCall(call) {
+  let leg = call.leg;
+  while (leg && typeof leg === 'object') {
+    if (leg.audit && leg.audit.severity === 'ERROR') return true;
+    leg = leg.next;
+  }
+  return false;
+}
+
+// -----------------------------------------------------------------------------
+// Render a call as a top-level <details>
+// -----------------------------------------------------------------------------
+function renderCall(call) {
+  const isErr = anyErrorInCall(call);
+  const method = call.method || 'call';
+  const tool = call.tool_name;
+  const title = tool ? `tools/call · ${tool}` : method;
+
+  const d = el('details', { class: `call${isErr ? ' err' : ''}` });
+  d.appendChild(el('summary', {},
+    el('span', { class: 'badge req' }, String(call.call_id)),
+    title
+  ));
+  const body = el('div', { class: 'body' });
+  for (const s of walkCall(call)) body.appendChild(s);
+  d.appendChild(body);
+  return d;
+}
+
+// -----------------------------------------------------------------------------
+// Bootstrap
+// -----------------------------------------------------------------------------
+function main() {
+  const raw = document.getElementById('trace-data').textContent.trim();
+  let calls = [];
+  try {
+    calls = JSON.parse(raw);
+  } catch (e) {
+    document.getElementById('calls').textContent = 'Error parsing #trace-data JSON: ' + e.message;
+    return;
+  }
+
+  // Stats
+  const stats = document.getElementById('stats');
+  const nCalls = calls.length;
+  const nTool = calls.filter(c => c.tool_name).length;
+  const nErr  = calls.filter(anyErrorInCall).length;
+  for (const [lab, val] of [['Calls', nCalls], ['Tool calls', nTool], ['Errors', nErr]]) {
+    stats.appendChild(el('div', { class: 'stat' },
+      el('div', { class: 'lab' }, lab),
+      el('div', { class: 'val' }, String(val))
+    ));
+  }
+
+  const callsDiv = document.getElementById('calls');
+  if (nCalls === 0) {
+    callsDiv.textContent = 'No calls in #trace-data. Replace the empty array with a real JSON array (see references/CALL_TREE_SCHEMA.md).';
+    return;
+  }
+  for (const c of calls) callsDiv.appendChild(renderCall(c));
+}
+
+document.addEventListener('DOMContentLoaded', main);
+</script>
+</body>
+</html>

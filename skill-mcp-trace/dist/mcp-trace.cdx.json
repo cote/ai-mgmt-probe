@@ -1,0 +1,21 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.6",
+  "serialNumber": "urn:uuid:7e91960d-b2fc-4dc8-9657-ab8b613217a4",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-07-01T11:10:16Z",
+    "tools": [ { "vendor": "the-skill-builder", "name": "build.sh", "version": "1.0" } ],
+    "component": {
+      "type": "application",
+      "bom-ref": "pkg:generic/mcp-trace@2.0",
+      "name": "mcp-trace",
+      "version": "2.0",
+      "description": "Instructions for capturing an end-to-end MCP call trace and rendering a self-contained HTML viewer.",
+      "licenses": [ { "license": { "id": "MIT" } } ],
+      "authors": [ { "name": "cote" } ],
+      "hashes": [ { "alg": "SHA-256", "content": "cad86557d3c7de6c88f760f5a04102f34a202f28c940ac0719a0f334bf5296c8" } ]
+    }
+  },
+  "components": []
+}
