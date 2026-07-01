@@ -114,9 +114,10 @@
 'use strict';
 
 const NODES = {
-  claude:  { label: 'Claude',  cls: 'claude' },
+  claude:  { label: 'Claude',  cls: 'claude'  },
   gateway: { label: 'gateway', cls: 'gateway' },
   probe:   { label: 'probe',   cls: 'probe'   },
+  audit:   { label: '',        cls: 'audit'   },   // audit crumb nodes always include a label like "mcp.tools.call.start"
 };
 
 // -----------------------------------------------------------------------------
@@ -139,7 +140,11 @@ function crumb(...parts) {
   const c = el('span', { class: 'crumb' });
   for (const p of parts) {
     if (p.kind === 'arrow') c.appendChild(el('span', { class: `arrow ${p.dir}` }, p.dir === 'in' ? '→' : '←'));
-    else c.appendChild(el('span', { class: `node ${NODES[p.node].cls}` }, NODES[p.node].label + (p.label ? ' ' + p.label : '')));
+    else {
+      const node = NODES[p.node] || { label: p.node, cls: 'unknown' };  // fail soft if a new node type is added and NODES wasn't updated
+      const text = [node.label, p.label].filter(Boolean).join(' ');
+      c.appendChild(el('span', { class: `node ${node.cls}` }, text));
+    }
   }
   return c;
 }

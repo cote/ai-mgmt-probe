@@ -1,10 +1,10 @@
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.6",
-  "serialNumber": "urn:uuid:7e91960d-b2fc-4dc8-9657-ab8b613217a4",
+  "serialNumber": "urn:uuid:d00a3391-c9fc-4e6b-8ebe-590060ad069b",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-07-01T11:10:16Z",
+    "timestamp": "2026-07-01T12:16:16Z",
     "tools": [ { "vendor": "the-skill-builder", "name": "build.sh", "version": "1.0" } ],
     "component": {
       "type": "application",
@@ -14,7 +14,7 @@
       "description": "Instructions for capturing an end-to-end MCP call trace and rendering a self-contained HTML viewer.",
       "licenses": [ { "license": { "id": "MIT" } } ],
       "authors": [ { "name": "cote" } ],
-      "hashes": [ { "alg": "SHA-256", "content": "cad86557d3c7de6c88f760f5a04102f34a202f28c940ac0719a0f334bf5296c8" } ]
+      "hashes": [ { "alg": "SHA-256", "content": "a61c2014feb019ba0189d4dc814cdb36bdf4f61adf8b7cf3fbe0f09da0e93a1e" } ]
     }
   },
   "components": []
