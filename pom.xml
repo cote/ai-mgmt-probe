@@ -60,6 +60,14 @@
 			<artifactId>spring-boot-starter-cloudfoundry</artifactId>
 		</dependency>
 
+		<!-- OAuth2 Resource Server: validates inbound JWTs against UAA's JWKS so the
+		     whoami tool can return claims for the authenticated user without our code
+		     ever touching the raw bearer token. Only enforced in the cloud profile. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
+
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator-test</artifactId>
