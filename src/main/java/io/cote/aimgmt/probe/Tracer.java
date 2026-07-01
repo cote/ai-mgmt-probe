@@ -5,12 +5,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 import org.springframework.ai.chat.client.ChatClient;
@@ -99,9 +97,31 @@ public class Tracer {
     }
 
     @McpTool(description = """
-        Captures the inbound HTTP request to THIS MCP server - method, URI, remote address,
-        and headers. The gateway X-ray: shows what the MCP Gateway injects (auth, X-Forwarded-*,
-        routing/instance headers). Sensitive headers (Authorization, Cookie) are masked.
+        X-ray of the inbound HTTP request the gateway forwarded to this MCP server.
+        Returns a structured tree with these sections:
+
+          identity   - resolved end user (id + source) from non-credential forwarded
+                       headers (X-Forwarded-User / -Email / -Preferred-Username /
+                       -Groups, X-User-Id, X-Auth-Request-*), every such header captured
+                       under forwardedIdentityHeaders, and authorizationScheme if an
+                       Authorization header is present (scheme only - the value is
+                       always masked).
+          tracing    - W3C traceparent/tracestate, all Zipkin B3 variants, X-Request-Id,
+                       X-Cloud-Trace-Context, X-Vcap-Request-Id, baggage.
+          forwarded  - every Forwarded / X-Forwarded-* / X-Real-* / Via header.
+          mcp        - every header starting with "mcp-" (Mcp-Session-Id and friends).
+          request    - everything Servlet exposes about the request line: method, URL,
+                       scheme, host:port, content type/length, secure flag, remote and
+                       local addresses, authType, dispatcherType.
+          headers    - every HTTP header NAME verbatim. Credential-bearing values
+                       (Authorization, Proxy-Authorization, Cookie, Set-Cookie, and
+                       anything ending in -token / -secret / -api-key / -credential /
+                       -password) are replaced with a fixed "******" - length not leaked.
+          cookies    - every cookie's name + attributes; value is "******".
+          queryParameters - parsed query string.
+
+        Never touches tokens or credentials. The capture is for "what did the gateway
+        forward", not "what is the user's auth token".
         """)
     Map<String, Object> requestInfo() {
         return inboundRequest();
@@ -170,41 +190,14 @@ public class Tracer {
         }
     }
 
-    /** Inbound HTTP request to this server, read from the thread-bound request. Sensitive
-     *  headers masked. Returns a note if no request is bound (tool ran off the request thread). */
+    /** Dispatch to RequestCapture if a request is bound to this thread. Returns a note
+     *  if the tool ran off the HTTP request thread (async dispatch or non-HTTP context). */
     private Map<String, Object> inboundRequest() {
-        var info = new LinkedHashMap<String, Object>();
         if (RequestContextHolder.getRequestAttributes() instanceof ServletRequestAttributes attrs) {
-            HttpServletRequest req = attrs.getRequest();
-            info.put("method", req.getMethod());
-            info.put("uri", req.getRequestURI());
-            info.put("remoteAddr", req.getRemoteAddr());
-            var headers = new LinkedHashMap<String, Object>();
-            for (String name : Collections.list(req.getHeaderNames())) {
-                String value = String.join(", ", Collections.list(req.getHeaders(name)));
-                headers.put(name, maskHeader(name, value));
-            }
-            info.put("headers", headers);
-        } else {
-            info.put("note", "no servlet request bound to this thread - the tool ran off the "
-                    + "HTTP request thread (async dispatch) or outside an HTTP context");
+            return RequestCapture.full(attrs.getRequest());
         }
-        return info;
-    }
-
-    /** Mask credential-bearing headers: keep an Authorization scheme visible (proves the gateway
-     *  injected a Bearer token) but never leak the token itself. */
-    private static String maskHeader(String name, String value) {
-        String lower = name.toLowerCase();
-        if (lower.equals("authorization") || lower.equals("proxy-authorization")) {
-            int sp = value.indexOf(' ');
-            String scheme = (sp > 0) ? value.substring(0, sp) + " " : "";
-            return scheme + "*** redacted (" + value.length() + " chars) ***";
-        }
-        if (lower.equals("cookie") || lower.equals("set-cookie")) {
-            return "*** redacted ***";
-        }
-        return value;
+        return Map.of("note", "no servlet request bound to this thread - the tool ran off "
+                + "the HTTP request thread (async dispatch) or outside an HTTP context");
     }
 
     /** Per-call response metadata: the typed fields plus the provider's extras bag. */

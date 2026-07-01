@@ -13,6 +13,14 @@ import io.modelcontextprotocol.spec.McpSchema.CallToolRequest;
 @Component
 public class Echo {
 
+    /**
+     *  Returns everything passed into the tool call, optionally adding in mea data from {@CallToolRequest#meta()}
+     * 
+     * @param argsIn whatever was passed in from the MCP client.
+     * @param sendAllInfo true to also send meta information 
+     * @param request the {@CallToolRequest}
+     * @return what was sent in
+     */
     @McpTool(description = "Returns everything passed into the echo() tool that the tool can find.")
     Map<String, Object> echo(
             @McpToolParam(description = "Anything to return back.", required = false) Object argsIn,
